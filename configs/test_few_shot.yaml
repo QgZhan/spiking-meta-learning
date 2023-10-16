@@ -1,0 +1,10 @@
+dataset: omniglot
+dataset_args: {split: test}
+
+#load: ./save/MODEL_FOLDER/EPOCH_X.pth
+
+load: ./save1/meta_omniglot-5shot_meta-baseline-Jelly_convnet4_5way_CKA_sgd/max-va.pth   # 元基线
+
+#load_encoder: ./save/classifier_omniglot_Jelly_convnet4_2way_RBF_CKA/max-va.pth     # 分类器基线
+
+# Replace load with load_encoder for loading the encoder only (e.g. for testing Classifier-Baseline)

@@ -1,0 +1,28 @@
+train_dataset: mini-imagenet
+train_dataset_args: {split: train, augment: resize}
+val_dataset: mini-imagenet
+val_dataset_args: {split: train_phase_val}
+fs_dataset: mini-imagenet
+fs_dataset_args: {split: test}
+eval_fs_epoch: 5
+
+model: classifier
+model_args:
+#    encoder: resnet12
+    encoder: Jelly_resnet12
+    encoder_args: {}
+    classifier: linear-classifier 
+    classifier_args: {n_classes: 64}
+
+n_way: 2
+n_query: 15
+n_shots: [1, 5]
+
+batch_size: 64
+max_epoch: 140
+optimizer: sgd
+#optimizer: adam
+optimizer_args: {lr: 0.05, weight_decay: 5.e-4, milestones: [90, 125]}
+
+save_epoch: 5
+visualize_datasets: true

@@ -1,0 +1,32 @@
+train_dataset: omniglot
+train_dataset_args: {split: train}
+tval_dataset: omniglot
+tval_dataset_args: {split: test}
+val_dataset: omniglot
+val_dataset_args: {split: val}
+
+model: meta-baseline
+model_args: 
+#    encoder: resnet12
+    encoder: Jelly_convnet4
+    encoder_args: {}
+load_encoder: ./save/classifier_omniglot_Jelly_convnet4_2way_RBF_CKA/max-va.pth
+
+
+n_way: 2
+n_shot: 5
+n_query: 15
+train_batches: 150
+train_ep_per_batch: 6
+
+training_batch: 35
+
+val_batches: 135
+val_ep_per_batch: 6
+
+max_epoch: 40
+optimizer: sgd
+#optimizer: adam
+optimizer_args: {lr: 0.001, weight_decay: 5.e-4}
+
+visualize_datasets: True
