@@ -22,11 +22,12 @@ def main(config):
     svname = args.name
     if svname is None:
         svname = 'meta_{}-{}shot'.format(
-                config['train_dataset'], config['n_shot'])
+            config['train_dataset'], config['n_shot'])
         svname += '_' + config['model'] + '-' + config['model_args']['encoder']
     if args.tag is not None:
         svname += '_' + args.tag
-    save_path = os.path.join('./save1', svname+f"_{config['n_way']}way_{args.method}_{config['optimizer']}") #meta实验结果保存在save1文件夹下
+    save_path = os.path.join('./save1',
+                             svname + f"_{config['n_way']}way_{args.method}_{config['optimizer']}")  # meta实验结果保存在save1文件夹下
     utils.ensure_path(save_path)
     utils.set_log_path(save_path)
     writer = SummaryWriter(os.path.join(save_path, 'tensorboard'))
@@ -53,19 +54,23 @@ def main(config):
 
     # train
     train_dataset = datasets.make(config['train_dataset'], **config['train_dataset_args'])
-    utils.log('train dataset: {} (x{}), {}'.format(train_dataset[0][0].shape, len(train_dataset), train_dataset.n_classes))
+    utils.log(
+        'train dataset: {} (x{}), {}'.format(train_dataset[0][0].shape, len(train_dataset), train_dataset.n_classes))
     # if config.get('visualize_datasets'):
     #     utils.visualize_dataset(train_dataset, 'train_dataset', writer)
-    train_sampler = CategoriesSampler(train_dataset.label, config['train_batches'], n_train_way, n_train_shot , n_query, ep_per_batch=config['train_ep_per_batch'])
+    train_sampler = CategoriesSampler(train_dataset.label, config['train_batches'], n_train_way, n_train_shot, n_query,
+                                      ep_per_batch=config['train_ep_per_batch'])
     train_loader = DataLoader(train_dataset, batch_sampler=train_sampler, num_workers=8, pin_memory=True)
 
     # tval
     if config.get('tval_dataset'):
         tval_dataset = datasets.make(config['tval_dataset'], **config['tval_dataset_args'])
-        utils.log('tval dataset: {} (x{}), {}'.format(tval_dataset[0][0].shape, len(tval_dataset), tval_dataset.n_classes))
+        utils.log(
+            'tval dataset: {} (x{}), {}'.format(tval_dataset[0][0].shape, len(tval_dataset), tval_dataset.n_classes))
         # if config.get('visualize_datasets'):
         #     utils.visualize_dataset(tval_dataset, 'tval_dataset', writer)
-        tval_sampler = CategoriesSampler(tval_dataset.label, config['val_batches'], n_way, n_shot , n_query, ep_per_batch=config['val_ep_per_batch'])
+        tval_sampler = CategoriesSampler(tval_dataset.label, config['val_batches'], n_way, n_shot, n_query,
+                                         ep_per_batch=config['val_ep_per_batch'])
         tval_loader = DataLoader(tval_dataset, batch_sampler=tval_sampler, num_workers=8, pin_memory=True)
     else:
         tval_loader = None
@@ -75,7 +80,8 @@ def main(config):
     utils.log('val dataset: {} (x{}), {}'.format(val_dataset[0][0].shape, len(val_dataset), val_dataset.n_classes))
     # if config.get('visualize_datasets'):
     #     utils.visualize_dataset(val_dataset, 'val_dataset', writer)
-    val_sampler = CategoriesSampler(val_dataset.label, config['val_batches'], n_way, n_shot , n_query, ep_per_batch=config['val_ep_per_batch'])
+    val_sampler = CategoriesSampler(val_dataset.label, config['val_batches'], n_way, n_shot, n_query,
+                                    ep_per_batch=config['val_ep_per_batch'])
     val_loader = DataLoader(val_dataset, batch_sampler=val_sampler, num_workers=8, pin_memory=True)
 
     ########
@@ -92,18 +98,18 @@ def main(config):
             encoder = models.load(torch.load(config['load_encoder'])).encoder
             model.encoder.load_state_dict(encoder.state_dict())
 
+    model.set_method(args.method)
+
     if config.get('_parallel'):
         print(config.get('_parallel'))
         model = nn.DataParallel(model)
-
-    model.set_method(args.method)
 
     utils.log('num params: {}'.format(utils.compute_n_params(model)))
     optimizer, lr_scheduler = utils.make_optimizer(model.parameters(), config['optimizer'], **config['optimizer_args'])
     # encoder1 = encoding.PoissonEncoder()  # 泊松编码
 
     ########
-    
+
     max_epoch = config['max_epoch']
     save_epoch = config.get('save_epoch')
     max_va = 0.
@@ -122,7 +128,7 @@ def main(config):
         # train
         model.train()
         if config.get('freeze_bn'):
-            utils.freeze_bn(model) 
+            utils.freeze_bn(model)
         writer.add_scalar('lr', optimizer.param_groups[0]['lr'], epoch)
 
         np.random.seed(epoch)
@@ -138,7 +144,10 @@ def main(config):
             img_shape = x_shot.shape[-3:]  # 5：torch.Size([1, 80, 80])   2：[1, 80, 80]
             x_shot = x_shot.view(-1, *img_shape)  # 5：[15, 1, 80, 80]  2:[6,1,80,80]
             with torch.no_grad():
-                x_shot = model.encoder(x_shot)
+                if isinstance(model, torch.nn.DataParallel):
+                    x_shot = model.module.encoder(x_shot)
+                else:
+                    x_shot = model.encoder(x_shot)
                 functional.reset_net(model)
             channel_dim = x_shot.shape[-3]
             x_shot = x_shot.view(*shot_shape, channel_dim, -1)
@@ -146,32 +155,36 @@ def main(config):
             model.train()
             query_num = x_query.shape[1]
             for i in range(0, query_num, config['training_batch']):
-                logits = model(x_shot, x_query[:, i: min(i+config['training_batch'], query_num), ...]).view(-1, n_train_way).requires_grad_()
-                loss = F.cross_entropy(logits, label[:, i: min(i+config['training_batch'], query_num)].reshape(-1))
-                acc = utils.compute_acc(logits, label[:, i: min(i+config['training_batch'], query_num)].reshape(-1))
+                # print(x_shot.shape, x_query[:, i: min(i+config['training_batch'], query_num), ...].shape)
+                logits = model(x_shot, x_query[:, i: min(i + config['training_batch'], query_num), ...]).view(-1,
+                                                                                                              n_train_way).requires_grad_()
+                loss = F.cross_entropy(logits, label[:, i: min(i + config['training_batch'], query_num)].reshape(-1))
+                acc = utils.compute_acc(logits, label[:, i: min(i + config['training_batch'], query_num)].reshape(-1))
 
-                optimizer.zero_grad()
                 loss.backward()
-                optimizer.step()
-                functional.reset_net(model)  ##############################################################################
+                functional.reset_net(
+                    model)  ##############################################################################
 
                 aves['tl'].add(loss.item())
                 aves['ta'].add(acc)
+            optimizer.step()
+            optimizer.zero_grad()
             # break
 
         # eval
         model.eval()
         functional.reset_net(model)  ##############################################################################
         for name, loader, name_l, name_a in [
-                ('tval', tval_loader, 'tvl', 'tva'),
-                ('val', val_loader, 'vl', 'va')]:
+            ('tval', tval_loader, 'tvl', 'tva'),
+            ('val', val_loader, 'vl', 'va')]:
 
             if (config.get('tval_dataset') is None) and name == 'tval':
                 continue
 
             np.random.seed(0)
             for data, _ in tqdm(loader, desc=name, leave=False):
-                x_shot, x_query = fs.split_shot_query(data.cuda(), n_way, n_shot, n_query, ep_per_batch=config['val_ep_per_batch'])
+                x_shot, x_query = fs.split_shot_query(data.cuda(), n_way, n_shot, n_query,
+                                                      ep_per_batch=config['val_ep_per_batch'])
                 label = fs.make_nk_label(n_way, n_query, ep_per_batch=config['val_ep_per_batch']).cuda()
 
                 # 前向无梯度计算x_shot
@@ -179,12 +192,16 @@ def main(config):
                 img_shape = x_shot.shape[-3:]  # 5：torch.Size([1, 80, 80])   2：[1, 80, 80]
                 x_shot = x_shot.view(-1, *img_shape)  # 5：[15, 1, 80, 80]  2:[6,1,80,80]
                 with torch.no_grad():
-                    x_shot = model.encoder(x_shot)
+                    if isinstance(model, torch.nn.DataParallel):
+                        x_shot = model.module.encoder(x_shot)
+                    else:
+                        x_shot = model.encoder(x_shot)
                     functional.reset_net(model)
                 channel_dim = x_shot.shape[-3]
                 x_shot = x_shot.view(*shot_shape, channel_dim, -1)
 
-                with torch.no_grad():            ####################################################
+                with torch.no_grad():  ####################################################
+                    # print(x_shot.shape, x_query.shape)
                     logits = model(x_shot, x_query).view(-1, n_way)
                 loss = F.cross_entropy(logits, label)
                 acc = utils.compute_acc(logits, label)
@@ -202,9 +219,9 @@ def main(config):
         t_used = utils.time_str(timer_used.t())
         t_estimate = utils.time_str(timer_used.t() / epoch * max_epoch)
         utils.log('epoch {}, train {:.4f}|{:.4f}, tval {:.4f}|{:.4f}, '
-                'val {:.4f}|{:.4f}, {} {}/{} (@{})'.format(
-                epoch, aves['tl'], aves['ta'], aves['tvl'], aves['tva'],
-                aves['vl'], aves['va'], t_epoch, t_used, t_estimate, _sig))
+                  'val {:.4f}|{:.4f}, {} {}/{} (@{})'.format(
+            epoch, aves['tl'], aves['ta'], aves['tvl'], aves['tva'],
+            aves['vl'], aves['va'], t_epoch, t_used, t_estimate, _sig))
 
         writer.add_scalars('loss', {
             'train': aves['tl'],
@@ -241,7 +258,7 @@ def main(config):
 
         if (save_epoch is not None) and epoch % save_epoch == 0:
             torch.save(save_obj,
-                    os.path.join(save_path, 'epoch-{}.pth'.format(epoch)))
+                       os.path.join(save_path, 'epoch-{}.pth'.format(epoch)))
         if aves['va'] > max_va:
             max_va = aves['va']
             torch.save(save_obj, os.path.join(save_path, 'max-va.pth'))

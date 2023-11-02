@@ -29,7 +29,7 @@ def main(config):
             svname += '-' + clsfr
     if args.tag is not None:
         svname += '_' + args.tag
-    save_path = os.path.join('./save', svname+f"_all_way_RBF_CKA")  #classifier实验结果保存在save文件夹下
+    save_path = os.path.join('./save', svname + f"_all_way_RBF_CKA")  # classifier实验结果保存在save文件夹下
     utils.ensure_path(save_path)
     utils.set_log_path(save_path)
     writer = SummaryWriter(os.path.join(save_path, 'tensorboard'))
@@ -39,8 +39,10 @@ def main(config):
 
     # train
     train_dataset = datasets.make(config['train_dataset'], **config['train_dataset_args'])
-    train_loader = DataLoader(train_dataset, config['batch_size'], shuffle=True, drop_last=True, num_workers=8, pin_memory=True)
-    utils.log('train dataset: {} (x{}), {}'.format(train_dataset[0][0].shape, len(train_dataset), train_dataset.n_classes))
+    train_loader = DataLoader(train_dataset, config['batch_size'], shuffle=True, drop_last=True, num_workers=8,
+                              pin_memory=True)
+    utils.log(
+        'train dataset: {} (x{}), {}'.format(train_dataset[0][0].shape, len(train_dataset), train_dataset.n_classes))
     # if config.get('visualize_datasets'):
     #     utils.visualize_dataset(train_dataset, 'train_dataset', writer)
 
@@ -53,7 +55,8 @@ def main(config):
     else:
         eval_val = True
         train_dataset, val_dataset = random_split(dataset=train_dataset,
-                                                  lengths=[int(0.8 * len(train_dataset)), int(0.2 * len(train_dataset))],
+                                                  lengths=[int(0.8 * len(train_dataset)),
+                                                           int(0.2 * len(train_dataset))],
                                                   generator=torch.Generator().manual_seed(0))
         train_loader = DataLoader(train_dataset, config['batch_size'], shuffle=True, drop_last=True, num_workers=8,
                                   pin_memory=True)
@@ -81,7 +84,7 @@ def main(config):
         for n, n_way in enumerate(n_ways):
             fs_dict[n_way] = []
             for n_shot in n_shots:
-                fs_sampler = CategoriesSampler(fs_dataset.label, 100, n_way, n_shot, n_query,
+                fs_sampler = CategoriesSampler(fs_dataset.label, config['task_nums'][n], n_way, n_shot, n_query,
                                                ep_per_batch=config['ep_per_batchs'][n])
                 fs_loader = DataLoader(fs_dataset, batch_sampler=fs_sampler, num_workers=8, pin_memory=True)
                 fs_dict[n_way].append(fs_loader)
@@ -119,7 +122,7 @@ def main(config):
     # encoder1 = encoding.PoissonEncoder()  # 泊松编码
 
     ########
-    
+
     max_epoch = config['max_epoch']
     save_epoch = config.get('save_epoch')
     max_va = 0.
@@ -131,7 +134,8 @@ def main(config):
             if not config.get('epoch_ex'):
                 break
             train_dataset.transform = train_dataset.default_transform
-            train_loader = DataLoader(train_dataset, config['batch_size'], shuffle=True, drop_last=True, num_workers=8, pin_memory=True)
+            train_loader = DataLoader(train_dataset, config['batch_size'], shuffle=True, drop_last=True, num_workers=8,
+                                      pin_memory=True)
 
         timer_epoch.s()
         aves_keys = ['tl', 'ta', 'vl', 'va']
@@ -183,8 +187,23 @@ def main(config):
                 for i, n_shot in enumerate(n_shots):
                     np.random.seed(0)
                     for data, _ in tqdm(fs_dict[n_way][i], desc=f'fs-{n_way}-way-{n_shot}-shot', leave=False):
-                        x_shot, x_query = fs.split_shot_query(data.cuda(), n_way, n_shot, n_query, ep_per_batch=config['ep_per_batchs'][n])
+                        x_shot, x_query = fs.split_shot_query(data.cuda(), n_way, n_shot, n_query,
+                                                              ep_per_batch=config['ep_per_batchs'][n])
                         label = fs.make_nk_label(n_way, n_query, ep_per_batch=config['ep_per_batchs'][n]).cuda()
+
+                        # 前向无梯度计算x_shot
+                        shot_shape = x_shot.shape[:-3]  # 5：torch.Size([1, 5, 3])   2：[1, 2, 3]
+                        img_shape = x_shot.shape[-3:]  # 5：torch.Size([1, 80, 80])   2：[1, 80, 80]
+                        x_shot = x_shot.view(-1, *img_shape)  # 5：[15, 1, 80, 80]  2:[6,1,80,80]
+                        with torch.no_grad():
+                            if isinstance(model, torch.nn.DataParallel):
+                                x_shot = model.module.encoder(x_shot)
+                            else:
+                                x_shot = model.encoder(x_shot)
+                            functional.reset_net(model)
+                        channel_dim = x_shot.shape[-3]
+                        x_shot = x_shot.view(*shot_shape, channel_dim, -1)
+
                         with torch.no_grad():
                             logits = fs_model(x_shot, x_query).view(-1, n_way)
                             acc = utils.compute_acc(logits, label)

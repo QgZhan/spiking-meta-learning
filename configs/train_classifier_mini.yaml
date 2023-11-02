@@ -14,11 +14,13 @@ model_args:
     classifier: linear-classifier 
     classifier_args: {n_classes: 64}
 
-n_way: 2
+n_ways: [2, 5, 10]
 n_query: 15
 n_shots: [1, 5]
+ep_per_batchs: [16, 6, 3]
+task_nums: [50, 133, 266]
 
-batch_size: 64
+batch_size: 30
 max_epoch: 140
 optimizer: sgd
 #optimizer: adam

@@ -6,12 +6,14 @@ import torch.nn as nn
 import models
 import utils
 from .models import register
+
+
 # from clock_driven import neuron, layer
 
 
 @register('classifier')
 class Classifier(nn.Module):
-    
+
     def __init__(self, encoder, encoder_args,
                  classifier, classifier_args):
         super().__init__()
@@ -29,7 +31,7 @@ class Classifier(nn.Module):
 @register('linear-classifier')
 class LinearClassifier(nn.Module):
 
-    def __init__(self, in_dim, n_classes, tau = 2.0, v_threshold=1.0, v_reset=0.0):
+    def __init__(self, in_dim, n_classes, tau=2.0, v_threshold=1.0, v_reset=0.0):
         super().__init__()
         # self.fc = nn.Sequential(
         #     # in_dim = 512

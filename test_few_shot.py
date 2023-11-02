@@ -30,8 +30,12 @@ def main(config):
     # dataset
     dataset = datasets.make(config['dataset'], **config['dataset_args'])
     utils.log('dataset: {} (x{}), {}'.format(dataset[0][0].shape, len(dataset), dataset.n_classes))
-    n_way = 5  #####################################################################################################
+    if config.get('load') is not None:
+        n_way = int(config['load'][config['load'].index('way')-1])  #####################################################################################################
+    else:
+        n_way = 2
     n_shot, n_query = args.shot, 15
+    print(n_way, 'way', n_shot, 'shot')
     n_batch = 50
     ep_per_batch = 4
     batch_sampler = CategoriesSampler(dataset.label, n_batch, n_way, n_shot, n_query, ep_per_batch=ep_per_batch)
@@ -125,7 +129,7 @@ def main(config):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', default='./configs/test_few_shot.yaml')
-    parser.add_argument('--shot', type=int, default=5)
+    parser.add_argument('--shot', type=int, default=1)
     parser.add_argument('--test-epochs', type=int, default=10)
     parser.add_argument('--sauc', action='store_true')
     parser.add_argument('--gpu', default='0')

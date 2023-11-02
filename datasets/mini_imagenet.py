@@ -17,7 +17,7 @@ class MiniImageNet(Dataset):
         if split == 'train':
             split_tag = 'train_phase_train'
         # split_file = 'miniImageNet_category_split_{}.pickle'.format(split_tag)
-        data_file='/data/Datasets/WBCDATA/miniImageNet'     #################################################
+        data_file = '/data/Datasets/WBCDATA/miniImageNet'  #################################################
         split_file = 'miniImageNet_category_split_{}.pickle'.format(split_tag)
         with open(os.path.join(data_file, split_file), 'rb') as f:
             pack = pickle.load(f, encoding='latin1')
@@ -29,12 +29,12 @@ class MiniImageNet(Dataset):
 
         min_label = min(label)
         label = [x - min_label for x in label]
-        
+
         self.data = data
         self.label = label
         self.n_classes = max(self.label) + 1
 
-        norm_params = {'mean': [0.485, 0.456, 0.406],  'std': [0.229, 0.224, 0.225]}
+        norm_params = {'mean': [0.485, 0.456, 0.406], 'std': [0.229, 0.224, 0.225]}
         # norm_params = {'mean': [0, 0, 0],  'std': [1, 1, 1]}  #########################################################
         normalize = transforms.Normalize(**norm_params)
         self.default_transform = transforms.Compose([
@@ -43,7 +43,7 @@ class MiniImageNet(Dataset):
             # transforms.RandomGrayscale(),  ##################################
             transforms.Resize(image_size),
             transforms.ToTensor(),
-            normalize,  
+            normalize,
         ])
         augment = kwargs.get('augment')
         if augment == 'resize':
@@ -72,6 +72,7 @@ class MiniImageNet(Dataset):
             mean = torch.tensor(norm_params['mean']).view(3, 1, 1).type_as(x)
             std = torch.tensor(norm_params['std']).view(3, 1, 1).type_as(x)
             return x * std + mean
+
         self.convert_raw = convert_raw
 
     def __len__(self):

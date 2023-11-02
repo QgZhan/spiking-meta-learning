@@ -1,7 +1,7 @@
 import torch.nn as nn
-
+import torch
 from .models import register
-from clock_driven import neuron, layer
+from clock_driven import neuron, layer, functional
 
 def conv3x3(in_planes, out_planes):
     return nn.Conv2d(in_planes, out_planes, 3, padding=1, bias=False)
@@ -76,13 +76,14 @@ class Block(nn.Module):
 
 class Jelly_ResNet12(nn.Module):
 
-    def __init__(self, channels, tau=2.0, T=16, v_threshold=1.0, v_reset=0.0, record_firing_rate=False):
+    def __init__(self, channels, tau=2.0, T=16, v_threshold=1.0, v_reset=0.0, record_firing_rate=False,
+                 img_channel=3, img_size=80):
         super().__init__()
         self.record_firing_rate = record_firing_rate
 
         self.inplanes = 3
         self.T = T
-        self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=3, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(img_channel, self.inplanes, kernel_size=3, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(self.inplanes)
         self.neuron = neuron.IFNode(v_threshold=v_threshold, v_reset=v_reset) #######################################
 
@@ -91,7 +92,7 @@ class Jelly_ResNet12(nn.Module):
         self.layer3 = self._make_layer(channels[2])
         self.layer4 = self._make_layer(channels[3])
 
-        self.out_dim = channels[3]
+        self.out_dim = self.calculate_out_shape(img_channel, img_size)
         self.neuron_fc = neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
 
         if self.record_firing_rate:
@@ -105,6 +106,19 @@ class Jelly_ResNet12(nn.Module):
             elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
+
+    def calculate_out_shape(self, img_channel, img_size):
+        input = torch.randn(1, img_channel, img_size, img_size)
+        x = self.conv1(input)  # 输入层
+        x = self.bn1(x)
+        out_x = self.neuron(x)  # 编码
+        out1 = self.layer1(out_x)
+        out2 = self.layer2(out1)
+        out3 = self.layer3(out2)
+        output = self.layer4(out3)
+        print(f"The input image shape is: {img_channel, img_size, img_size}, the output shape is: {output.shape}")
+        functional.reset_net(self)
+        return output.reshape(1, -1).shape[-1]
 
     def reset_firing_rate(self):
         if self.record_firing_rate:
@@ -161,11 +175,11 @@ class Jelly_ResNet12(nn.Module):
 
 
 @register('Jelly_resnet12')
-def resnet12():
-    return Jelly_ResNet12([64, 128, 256, 512])
+def resnet12(img_channel=3, img_size=80):
+    return Jelly_ResNet12([64, 128, 256, 512], img_channel=int(img_channel), img_size=int(img_size))
 
 
 @register('resnet12-wide')
-def resnet12_wide():
-    return Jelly_ResNet12([64, 160, 320, 640])
+def resnet12_wide(img_channel=3, img_size=80):
+    return Jelly_ResNet12([64, 160, 320, 640], img_channel=int(img_channel), img_size=int(img_size))
 
